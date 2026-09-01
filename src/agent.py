@@ -317,6 +317,9 @@ including every item they did not mention, unchanged.
     the cart, return an empty items list.
 15. If the change is impossible, return the basket exactly as it is and
     explain why in reasoning.
+16. If the customer asks for something already in the basket, do not add
+    a different one in its place. Say it is already there and ask
+    whether they want more of it.
 
 {_FORMAT}"""
 

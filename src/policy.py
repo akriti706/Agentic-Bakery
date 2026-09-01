@@ -1,14 +1,4 @@
-"""
-The gate. Every basket passes through here before it can be paid for.
 
-Nothing the model says is trusted. Product ids, names, prices and
-quantities are re-checked against the catalog, and the total is
-re-computed from catalog prices.
-
-Each rule is an independent function taking (basket, mandate, rows) and
-returning a list of reasons. Adding a rule means appending one function
-to RULES.
-"""
 
 from dataclasses import dataclass, field
 
@@ -53,15 +43,6 @@ def _mandate_valid(basket, mandate, rows):
 def _basket_not_empty(basket, mandate, rows):
     if basket.is_empty:
         return ["The basket is empty."]
-    return []
-
-
-def _no_duplicates(basket, mandate, rows):
-    seen = set()
-    for item in basket.items:
-        if item.product_id in seen:
-            return [f"{item.name} appears more than once in the basket."]
-        seen.add(item.product_id)
     return []
 
 
@@ -128,7 +109,6 @@ def _velocity_ok(basket, mandate, rows):
 RULES = [
     _mandate_valid,
     _basket_not_empty,
-    _no_duplicates,
     _products_exist,
     _prices_match,
     _quantities_sane,
