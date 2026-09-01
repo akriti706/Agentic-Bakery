@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>agentic bakers</title>
+  <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    <div class="login-form">
+      <h1>Bakers</h1>
+      <div class="container">
+        <div class="main">
+          <div class="content">
+            <h2>Log In</h2>
+            <form action="" method="post" id="loginForm">
+              <input type="text" id="email" placeholder="email id" required autofocus="">
+              <input type="password" id="password" placeholder="password" required>
+              <button class="btn" type="submit">
+                Login
+              </button>
+            </form>
+            <p class="account">Don't have an account? <a href="/static/register.html">Register</a></p>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+    <script>
+      const login=document.getElementById("loginForm");
+      login.addEventListener("submit",async function (event){
+      event.preventDefault();
+      const userEmail=document.getElementById('email').value;
+      const userPassword=document.getElementById('password').value;
+      const response=await fetch("/login",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+          email:userEmail,
+          password:userPassword
+        })
+      });
+      const data=await response.json();
+      if(response.ok && data.success){
+        const params=new URLSearchParams({
+          customer_id:data.customer_id,
+          session_id:data.session_id
+        });
+        window.location.href="/static/home.html?"+params.toString();
+      }
+      else{
+        alert("user not found! please register");
+      }
+    });
+    </script>
+  </body>
+</html>

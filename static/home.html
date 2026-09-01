@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Home | Agentic Bakers</title>
+        <link rel="stylesheet" href="/static/style.css">
+    </head>
+    <body class="home-page">
+        <header class="site-header">
+            <a class="brand" href="#top">Bakers <span aria-hidden="true">&#9829;</span></a>
+
+            <nav class="site-nav" aria-label="Main navigation">
+                <a class="active" href="#top">Home</a>
+                <a href="#menu">Menu</a>
+                <a href="#deals">Offers</a>
+                <a href="#myorders">Order</a>
+                <a class="nav-button" href="/static/index.html">Log out</a>
+                <span class="customer-badge" id="customerId" aria-live="polite"></span>
+            </nav>
+        </header>
+
+        <main id="top">
+            <section class="home-hero">
+                <div class="hero-copy">
+                    <p class="eyebrow">Fresh from our oven</p>
+                    <h1>Good days start with something <em>sweet.</em></h1>
+                    <p class="hero-text">Tell our assistant what you are craving. It searches the real menu, checks stock and prices, and builds your order.</p>
+                    <div class="hero-actions">
+                        <button class="primary-action" data-ask="what do you have for a birthday">Start an order</button>
+                        <a class="secondary-action" href="#menu">Browse the menu</a>
+                    </div>
+                </div>
+                <div class="hero-note" aria-label="Today's bakery note">
+                    <span class="note-label">Ask it anything</span>
+                    <strong>"A chocolate cake<br>under 500"</strong>
+                    <span class="note-detail">Flavour, occasion, budget — it understands all three</span>
+                </div>
+            </section>
+
+            <section class="menu-section" id="menu">
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">Made with care</p>
+                        <h2>Find your happy bite</h2>
+                    </div>
+                    <p>Tap any category and the assistant will show you what is in stock.</p>
+                </div>
+                <div class="category-grid">
+                    <button class="category-card category-cake" data-ask="show me your cakes">
+                        <span class="category-icon" aria-hidden="true">&#9670;</span>
+                        <h3>Cakes</h3>
+                        <p>Layered, frosted, and made for sharing.</p>
+                        <span class="card-action">Shop cakes <span aria-hidden="true">&#8594;</span></span>
+                    </button>
+                    <button class="category-card category-pastry" data-ask="show me your cupcakes">
+                        <span class="category-icon" aria-hidden="true">&#10047;</span>
+                        <h3>Cupcakes</h3>
+                        <p>Small, soft, and topped with swirls of cream.</p>
+                        <span class="card-action">Shop cupcakes <span aria-hidden="true">&#8594;</span></span>
+                    </button>
+                    <button class="category-card category-cookie" data-ask="show me your brownies">
+                        <span class="category-icon" aria-hidden="true">&#9679;</span>
+                        <h3>Brownies</h3>
+                        <p>Chewy, fudgy, and impossible to eat just one.</p>
+                        <span class="card-action">Shop brownies <span aria-hidden="true">&#8594;</span></span>
+                    </button>
+                    <button class="category-card category-pastry" data-ask="show me your pastries">
+                        <span class="category-icon" aria-hidden="true">&#10048;</span>
+                        <h3>Pastries</h3>
+                        <p>Buttery, flaky, and best with a hot drink.</p>
+                        <span class="card-action">Shop pastries <span aria-hidden="true">&#8594;</span></span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="menu-section deals-section" id="deals" hidden>
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">On offer today</p>
+                        <h2>Sweet deals</h2>
+                    </div>
+                    <p>Tap one to add it to your order. While stock lasts.</p>
+                </div>
+                <div class="deals-grid" id="dealsGrid"></div>
+            </section>
+
+            <section class="story-section" id="about">
+                <div>
+                    <p class="eyebrow">The Bakers promise</p>
+                    <h2>Made slowly.<br>Shared gladly.</h2>
+                </div>
+                <p>We believe the best recipes leave room for care. Every order is mixed, baked, and finished by hand with ingredients we are proud to serve.</p>
+                <button class="primary-action" data-ask="what do you recommend">Ask for a recommendation</button>
+            </section>
+
+            <section class="account-section" id="myorders">
+                <div class="section-heading account-heading">
+                    <div>
+                        <p class="eyebrow">Your bakery desk</p>
+                        <h2>Order &amp; activity</h2>
+                    </div>
+                    <p>Everything added and every decision, in one place.</p>
+                </div>
+
+                <div class="dashboard-grid">
+                    <article class="panel chat-panel" aria-label="Bakers chat assistant">
+                        <div class="panel-heading sharp-heading">
+                            <div class="assistant-meta">
+                                <div class="assistant-avatar" aria-hidden="true">&#9829;</div>
+                                <div>
+                                    <h3>Bakers assistant</h3>
+                                    <span><i></i> Ready to help</span>
+                                </div>
+                            </div>
+                            <span class="chat-badge">Sweet talk</span>
+                        </div>
+
+                        <div class="chat-shell">
+                            <div class="msgs" id="msgs">
+                                <div class="empty">Hello! What are we baking for you today?</div>
+                            </div>
+                            <div class="chips" id="chips">
+                                <button class="chip" data-ask="i want a chocolate cake for my birthday">Chocolate cake for a birthday</button>
+                                <button class="chip" data-ask="what's on discount">What's on discount</button>
+                                <button class="chip" data-ask="something fruity under 300">Something fruity under 300</button>
+                            </div>
+                            <div class="composer">
+                                <input type="text" id="msg" placeholder="Ask about cakes, flavours, offers..." autocomplete="off">
+                                <button id="send" aria-label="Send message">&#8593;</button>
+                            </div>
+                            <div class="state" id="state">Ready</div>
+                        </div>
+                    </article>
+
+                    <div class="dashboard-stack">
+                        <article class="panel cart-panel" id="cartPanel">
+                            <div class="panel-heading"><h3>Cart</h3><span id="cartTotal">Rs0.00</span></div>
+                            <div class="cart-content" id="cartContent"><p class="panel-empty">Your cart is waiting for something delicious.</p></div>
+                            <p class="paid-strip" id="paidStrip" hidden></p>
+                            <p class="budget-strip" id="budgetStrip" hidden></p>
+                            <details class="budget-form">
+                                <summary>Change budget</summary>
+                                <div class="budget-fields">
+                                    <label for="totalBudget">Budget</label>
+                                    <input type="number" id="totalBudget" min="1" step="50">
+                                    <button class="reset" id="resetBtn">Start new session</button>
+                                </div>
+                                <p class="budget-hint">A new session clears the cart and sets a fresh spending limit.</p>
+                            </details>
+                            <button class="pay" id="payBtn" disabled>Pay Rs0.00</button>
+                        </article>
+
+                        <article class="panel audit-panel">
+                            <div class="panel-heading"><h3>Audit trail</h3><span class="audit-live"><i></i> Live</span></div>
+                            <div id="ledger" class="ledger"><div class="empty">Nothing recorded yet.</div></div>
+                        </article>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="site-footer">
+            <span>Bakers <span aria-hidden="true">&#9829;</span></span>
+            <span>Freshly made in small batches</span>
+        </footer>
+
+        <script>
+            const params = new URLSearchParams(window.location.search);
+            const customerId = params.get('customer_id');
+
+            const messages = document.getElementById('msgs');
+            const messageInput = document.getElementById('msg');
+            const sendButton = document.getElementById('send');
+            const chatState = document.getElementById('state');
+            const chips = document.getElementById('chips');
+            const cartPanel = document.getElementById('cartPanel');
+            const cartContent = document.getElementById('cartContent');
+            const paidStrip = document.getElementById('paidStrip');
+            const cartTotal = document.getElementById('cartTotal');
+            const budgetStrip = document.getElementById('budgetStrip');
+            const payButton = document.getElementById('payBtn');
+            const ledger = document.getElementById('ledger');
+            const dealsSection = document.getElementById('deals');
+            const dealsGrid = document.getElementById('dealsGrid');
+            const totalBudgetInput = document.getElementById('totalBudget');
+            const resetButton = document.getElementById('resetBtn');
+
+            let sessionId = params.get('session_id');
+            let total = 0;
+            let canPay = false;
+            let busy = false;
+
+            function money(value) {
+                return 'Rs' + Number(value || 0).toFixed(2);
+            }
+
+            function setBusy(value) {
+                busy = value;
+                payButton.disabled = busy || !canPay;
+                sendButton.disabled = busy;
+                resetButton.disabled = busy;
+                document.querySelectorAll('[data-ask]').forEach(function (el) {
+                    el.disabled = busy;
+                });
+            }
+
+            function bubble(text, who) {
+                const empty = messages.querySelector('.empty');
+                if (empty) empty.remove();
+                const el = document.createElement('div');
+                el.className = who === 'user' ? 'user-message' : 'shop-message';
+                el.textContent = text;
+                messages.appendChild(el);
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            function showTyping(on) {
+                const existing = messages.querySelector('.typing');
+                if (!on) {
+                    if (existing) existing.remove();
+                    return;
+                }
+                if (existing) return;
+                const el = document.createElement('div');
+                el.className = 'shop-message typing';
+                el.innerHTML = '<span></span><span></span><span></span>';
+                messages.appendChild(el);
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            function renderCart(data) {
+                total = data.total || 0;
+                canPay = Boolean(data.can_pay);
+                cartTotal.textContent = money(total);
+                payButton.textContent = 'Pay ' + money(total);
+
+                const items = data.items || [];
+                if (items.length === 0) {
+                    cartContent.innerHTML = '<p class="panel-empty">Your cart ' +
+                        'is waiting for something delicious.</p>';
+                } else {
+                    let html = items.map(function (item) {
+                        const was = item.list_price
+                            ? '<s>' + money(item.list_price * item.quantity) + '</s> '
+                            : '';
+                        return '<div class="cart-row"><span>' + item.name +
+                            ' <em>x' + item.quantity + '</em></span><span>' + was +
+                            money(item.unit_price * item.quantity) + '</span></div>';
+                    }).join('');
+                    if (data.saved > 0) {
+                        html += '<p class="cart-saved">You saved ' +
+                            money(data.saved) + '</p>';
+                    }
+                    cartContent.innerHTML = html;
+                }
+
+                if (data.mandate) {
+                    showMandate(data.mandate, data.remaining_budget);
+                }
+
+                showPaid(data);
+            }
+
+            function showPaid(data) {
+                const paid = data.state === 'PAID';
+                cartPanel.classList.toggle('is-paid', paid);
+                if (!paid) {
+                    paidStrip.hidden = true;
+                    return;
+                }
+                const reference = data.payment ? data.payment.reference : '';
+                paidStrip.innerHTML = '<strong>Paid ' + money(data.total) +
+                    '</strong>' + (reference
+                        ? '<span>Reference ' + reference + '</span>' : '');
+                paidStrip.hidden = false;
+                payButton.textContent = 'Paid';
+            }
+
+            function showMandate(mandate, remaining) {
+                budgetStrip.textContent = 'Authorised ' +
+                    money(mandate.total_budget) +
+                    (remaining === undefined
+                        ? '' : ' — ' + money(remaining) + ' left');
+                budgetStrip.hidden = false;
+                totalBudgetInput.value = mandate.total_budget;
+            }
+
+            function clearSession() {
+                messages.innerHTML = '<div class="empty">Hello! What are ' +
+                    'we baking for you today?</div>';
+                ledger.innerHTML = '<div class="empty">Nothing recorded ' +
+                    'yet.</div>';
+                cartContent.innerHTML = '<p class="panel-empty">Your cart ' +
+                    'is waiting for something delicious.</p>';
+                cartTotal.textContent = money(0);
+                payButton.textContent = 'Pay ' + money(0);
+                cartPanel.classList.remove('is-paid');
+                paidStrip.hidden = true;
+                chips.hidden = false;
+                total = 0;
+                canPay = false;
+            }
+
+            function renderLedger(trail) {
+                if (!trail || trail.length === 0) return;
+                ledger.innerHTML = trail.slice().reverse().map(function (row) {
+                    const detail = [row.decision, row.detail, row.reason]
+                        .filter(Boolean).join(' — ');
+                    return '<div class="row"><span class="t">' +
+                        (row.timestamp || '').slice(11, 19) +
+                        '</span><div><div class="e">' + row.event_type +
+                        '</div><div class="d">' + detail + '</div></div></div>';
+                }).join('');
+            }
+
+            function apply(data) {
+                showTyping(false);
+                if (data.error) {
+                    chatState.textContent = data.error;
+                    return;
+                }
+                bubble(data.reply, 'shop');
+                renderCart(data);
+                renderLedger(data.audit_trail);
+                chatState.textContent = data.state;
+            }
+
+            async function post(url, body) {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                return response.json();
+            }
+
+            async function send(text) {
+                if (!text || busy || !sessionId) return;
+
+                chips.hidden = true;
+                bubble(text, 'user');
+                messageInput.value = '';
+                setBusy(true);
+                showTyping(true);
+                chatState.textContent = 'Thinking...';
+
+                try {
+                    apply(await post('/app/start', {
+                        session_id: sessionId,
+                        message: text
+                    }));
+                } catch (error) {
+                    showTyping(false);
+                    chatState.textContent = 'Could not reach the shop.';
+                }
+                setBusy(false);
+                messageInput.focus();
+            }
+
+            function askFor(text) {
+                document.getElementById('myorders').scrollIntoView({
+                    behavior: 'smooth', block: 'start'
+                });
+                send(text);
+            }
+
+            async function payNow() {
+                if (busy || !canPay) return;
+                setBusy(true);
+                showTyping(true);
+                chatState.textContent = 'Paying...';
+
+                try {
+                    apply(await post('/app/pay', {
+                        session_id: sessionId,
+                        total: total
+                    }));
+                } catch (error) {
+                    showTyping(false);
+                    chatState.textContent = 'Payment could not be reached.';
+                }
+                setBusy(false);
+            }
+
+            async function startSession() {
+                if (busy || !customerId) return;
+                setBusy(true);
+                chatState.textContent = 'Starting a new session...';
+
+                try {
+                    const data = await post('/app/session', {
+                        customer_id: customerId,
+                        total_budget: Number(totalBudgetInput.value) || null
+                    });
+                    sessionId = data.session_id;
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                    clearSession();
+                    showMandate(data.mandate, data.mandate.total_budget);
+                    history.replaceState(null, '', '?customer_id=' +
+                        customerId + '&session_id=' + sessionId);
+                    chatState.textContent = 'New session ready';
+                } catch (error) {
+                    chatState.textContent = 'Could not start a session.';
+                }
+                setBusy(false);
+            }
+
+            async function loadDeals() {
+                try {
+                    const response = await fetch('/app/deals');
+                    const data = await response.json();
+                    if (!data.deals || data.deals.length === 0) return;
+
+                    dealsGrid.innerHTML = data.deals.map(function (deal) {
+                        return '<button class="deal-card" data-ask="add a ' +
+                            deal.item_name + ' to my cart">' +
+                            '<span class="deal-badge">' + deal.discount + '% off</span>' +
+                            '<h3>' + deal.item_name + '</h3>' +
+                            '<p class="deal-meta">' + deal.category +
+                            ' &middot; ' + deal.flavor + '</p>' +
+                            '<p class="deal-price">' + money(deal.final_price) +
+                            '<s>' + money(deal.price) + '</s></p>' +
+                            '<p class="deal-stock">' + deal.available_quantity +
+                            ' left &middot; tap to add</p></button>';
+                    }).join('');
+                    dealsSection.hidden = false;
+                } catch (error) {
+                    chatState.textContent = 'Could not load offers.';
+                }
+            }
+
+            if (customerId) {
+                document.getElementById('customerId').textContent =
+                    'Customer ID: ' + customerId;
+            }
+
+            if (!sessionId) {
+                chatState.textContent = 'No session. Please log in again.';
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+            }
+
+            sendButton.addEventListener('click', function () {
+                send(messageInput.value.trim());
+            });
+            payButton.addEventListener('click', payNow);
+            resetButton.addEventListener('click', startSession);
+            messageInput.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    send(messageInput.value.trim());
+                }
+            });
+
+            document.addEventListener('click', function (event) {
+                const trigger = event.target.closest('[data-ask]');
+                if (trigger) askFor(trigger.dataset.ask);
+            });
+
+            loadDeals();
+        </script>
+    </body>
+</html>

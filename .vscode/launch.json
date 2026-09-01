@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Bakery app",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": ["main:app", "--app-dir", "src"],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

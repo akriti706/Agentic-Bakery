@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pandas
+requests
+python-dotenv
+razorpay
+pytest
+mcp
