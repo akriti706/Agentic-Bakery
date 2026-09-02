@@ -1,5 +1,3 @@
-"""FastAPI entry point."""
-
 import os
 from pathlib import Path
 
@@ -50,7 +48,7 @@ class PayRequest(BaseModel):
 class SessionRequest(BaseModel):
     customer_id: str
     total_budget: float | None = None
-    per_item_max: float | None = None
+    
 
 
 

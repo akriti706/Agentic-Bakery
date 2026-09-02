@@ -1,5 +1,3 @@
-"""Parsing must reject bad model output loudly, never silently."""
-
 import pytest
 
 import agent

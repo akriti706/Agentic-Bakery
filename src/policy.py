@@ -1,17 +1,4 @@
-"""
-The gate. Every basket passes through here before it can be paid for.
-
-Nothing the model says is trusted. Product ids, names, prices and
-quantities are re-checked against the catalog, and the total is
-re-computed from catalog prices.
-
-Each rule is an independent function taking (basket, mandate, rows) and
-returning a list of reasons. Adding a rule means appending one function
-to RULES.
-"""
-
 from dataclasses import dataclass, field
-
 import catalog
 import audit
 

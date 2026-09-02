@@ -1,5 +1,3 @@
-"""Payment providers behind one interface."""
-
 import os
 import uuid
 from dataclasses import dataclass

@@ -1,10 +1,3 @@
-"""
-audit.py — append-only decision log.
-
-Deliberately has no update() or delete(). An audit trail that can be
-edited is not an audit trail.
-"""
-
 import sqlite3
 import os
 from datetime import datetime, timedelta
@@ -20,7 +13,6 @@ def _connect():
 
 
 def init():
-    """Create the audit table. Safe to call repeatedly."""
     conn = _connect()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS audit_log (
@@ -60,7 +52,6 @@ def log(session_id: str,
 
 
 def get_session(session_id: str) -> list[dict]:
-    """Full ordered story of one purchase attempt."""
     conn = _connect()
     rows = conn.execute(
         "SELECT * FROM audit_log WHERE session_id = ? ORDER BY id ASC",
@@ -71,10 +62,6 @@ def get_session(session_id: str) -> list[dict]:
 
 
 def count_recent_purchases(customer_id: str, minutes: int) -> int:
-    """
-    How many payments this customer completed in the last N minutes.
-    Powers the velocity check in policy.py.
-    """
     cutoff = (datetime.now() - timedelta(minutes=minutes)).isoformat()
     conn = _connect()
     row = conn.execute(
@@ -89,7 +76,7 @@ def count_recent_purchases(customer_id: str, minutes: int) -> int:
     return row[0]
 
 
-# Event types — use these constants, don't type strings by hand
+
 REQUEST_RECEIVED = "REQUEST_RECEIVED"
 SEARCH = "SEARCH"
 BASKET_PROPOSED = "BASKET_PROPOSED"
@@ -98,10 +85,7 @@ STOCK_RESERVED = "STOCK_RESERVED"
 STOCK_RELEASED = "STOCK_RELEASED"
 PAYMENT_ATTEMPT = "PAYMENT_ATTEMPT"
 PAYMENT_RESULT = "PAYMENT_RESULT"
-RECOVERY_ATTEMPT = "RECOVERY_ATTEMPT"
 SESSION_COMPLETE = "SESSION_COMPLETE"
 
 
-if __name__ == "__main__":
-    init()
-    print(f"Audit table ready in {DB_PATH}")
+

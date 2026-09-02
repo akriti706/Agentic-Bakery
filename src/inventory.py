@@ -1,7 +1,4 @@
-
-
 import sqlite3
-
 import load_items
 
 
@@ -10,7 +7,6 @@ def _connect():
 
 
 def reserve(items) -> tuple[bool, str]:
-    """Atomically decrement stock for every item, or change nothing."""
     con = _connect()
     try:
         con.execute("begin immediate")
@@ -32,7 +28,6 @@ def reserve(items) -> tuple[bool, str]:
 
 
 def release(items) -> None:
-    """Put reserved stock back after a failed payment."""
     con = _connect()
     try:
         con.execute("begin immediate")

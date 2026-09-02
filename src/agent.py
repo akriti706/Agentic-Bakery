@@ -1,5 +1,3 @@
-
-
 import json
 import os
 
@@ -29,7 +27,6 @@ TIMEOUT_SECONDS = 120
 
 class AgentError(RuntimeError):
     pass
-
 
 def _tool_specs():
     return [
@@ -274,8 +271,8 @@ def _limits(mandate, spent=0.0):
         return (f"The customer authorised Rs{mandate.total_budget:.2f} in "
                 f"total. Rs{spent:.2f} is already in the basket, so "
                 f"Rs{remaining:.2f} is left.")
-    return (f"The customer has authorised Rs{mandate.total_budget:.2f} "
-            f"in total.")
+    return (f"The customer has authorised Rs{mandate.total_budget:.2f} in total. ")
+            
 
 
 def _propose_prompt(mandate):
@@ -305,14 +302,17 @@ The customer's basket:
 
 Total: Rs{basket.total:.2f}
 
-They have asked for a change. Return the COMPLETE updated basket,
-including every item they did not mention, unchanged.
+They have asked for a change. 
+
 
 {_limits(mandate, basket.total)}
 
 {_RULES}
-13. Adding a new item means returning the existing items plus the new
-    one. Do not drop anything the customer did not ask you to remove.
+
+13. Return the COMPLETE updated basket every time — every item the
+    customer did not mention stays exactly as it is. Adding something
+    means the existing items plus the new one; never drop anything they
+    did not ask you to remove.
 14. To remove something, leave it out of the list. If they ask to clear
     the cart, return an empty items list.
 15. If the change is impossible, return the basket exactly as it is and

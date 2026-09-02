@@ -1,18 +1,3 @@
-"""
-Exposes the shop to agents this merchant does not control.
-
-The buyer's agent gets the same read-only catalog tools the internal
-agent uses, plus a quote tool that runs the real policy gate. An outside
-agent therefore faces exactly the checks the inside one does: it cannot
-invent a price, exceed a mandate, or oversell stock, because none of
-those decisions live in the agent.
-
-Nothing here writes. Reserving stock and charging a card stay behind the
-authenticated session flow in conversation.py.
-
-    python src/mcp_server.py
-"""
-
 import uuid
 from datetime import datetime, timedelta
 
@@ -141,8 +126,9 @@ def quote_basket(items: list[dict],
         "saved": basket.saved,
         "reasons": decision.reasons,
         "items": [item.as_dict() for item in basket.items],
-        "note": ("Quotes are priced by the shop, not by the caller. To "
-                 "complete a purchase, use the shop's checkout."),
+        "note": ("Tell the customer this price is the shop's own, and that "
+                "nothing is reserved until they complete checkout on the "
+                "shop's site."),
     }
 
 

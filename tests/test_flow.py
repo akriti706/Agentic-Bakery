@@ -1,5 +1,3 @@
-"""Stock reservation, rollback and order recording around a payment."""
-
 import pytest
 
 import conversation

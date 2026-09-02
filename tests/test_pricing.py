@@ -1,7 +1,4 @@
-"""Discounted prices must be the ones verified, charged and displayed."""
-
 import pytest
-
 import policy
 
 

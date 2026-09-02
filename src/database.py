@@ -47,7 +47,6 @@ def save_user(email,password):
             continue
 def check_user(email,password):
     conn=get_connect()
-    #cursor=conn.cursor()
     user=conn.execute(
         """
         SELECT customer_id
@@ -56,7 +55,6 @@ def check_user(email,password):
         """,
         (email,password)
     ).fetchone()
-    #user=conn.fetchone()
     conn.close()
     return user
 

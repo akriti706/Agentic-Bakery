@@ -1,5 +1,3 @@
-"""Append-only record of every payment attempt."""
-
 import csv
 import json
 import os

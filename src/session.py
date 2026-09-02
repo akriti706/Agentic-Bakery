@@ -1,5 +1,3 @@
-"""In-memory session store. One conversation, one Session."""
-
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -12,14 +10,11 @@ CANCELLED = "CANCELLED"
 
 HISTORY_CONTEXT_TURNS = 8
 
-
 @dataclass
 class Turn:
     who: str
     text: str
     
-
-
 @dataclass
 class Session:
     session_id: str

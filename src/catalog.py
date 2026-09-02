@@ -1,7 +1,4 @@
-"""Read-only access to the shop's inventory."""
-
 import sqlite3
-
 import load_items
 
 SEPARATORS = (";", "&")
@@ -37,7 +34,6 @@ def _split(raw):
 
 
 def enum_values(column):
-    """Distinct values for a column, with compound cells split into tags."""
     con = _connect()
     try:
         rows = con.execute(
@@ -63,10 +59,9 @@ def _build(filters, in_stock_only=True):
 
     if filters.get("query"):
         sql += (" and (lower(item_name) like ? or lower(description) like ?"
-                " or lower(flavor) like ? or lower(taste_profile) like ?"
                 " or lower(recommendation) like ?)")
         term = f"%{filters['query'].lower()}%"
-        params += [term] * 5
+        params += [term] * 3
 
     if filters.get("max_price") is not None:
         sql += " and price * (1 - coalesce(discount, 0) / 100.0) <= ?"
@@ -96,7 +91,6 @@ def _build(filters, in_stock_only=True):
 
 
 def _out_of_stock(con, filters, limit):
-    """Products the original filters matched but that have no stock left."""
     sql, params = _build(filters, in_stock_only=False)
     rows = con.execute(sql, params + [limit]).fetchall()
     return [dict(r)["item_name"] for r in rows
@@ -106,14 +100,6 @@ def _out_of_stock(con, filters, limit):
 def search_products(query=None, category=None, flavor=None, occasion=None,
                     taste=None, max_price=None, on_sale=None, limit=10,
                     relax=True):
-    """
-    Search the catalog.
-
-    Returns results plus the filters that produced them and any that had
-    to be dropped. Category and max_price are never relaxed: substituting
-    a different kind of item, or overshooting a stated budget, is worse
-    than returning nothing.
-    """
     filters = {
         "query": query or None,
         "category": category or None,
@@ -152,7 +138,6 @@ def search_products(query=None, category=None, flavor=None, occasion=None,
 
 
 def get_product(product_id):
-    """Authoritative row for one product, or None."""
     try:
         pid = int(product_id)
     except (TypeError, ValueError):
@@ -167,7 +152,6 @@ def get_product(product_id):
 
 
 def deals(limit=8):
-    """In-stock products with an active discount, deepest first."""
     con = _connect()
     try:
         rows = con.execute(

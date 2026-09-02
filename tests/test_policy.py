@@ -40,6 +40,12 @@ def test_empty_basket_blocks(mandate):
     assert not evaluate(Basket(), mandate).approved
 
 
+def test_duplicate_product_blocks(product, mandate):
+    basket = Basket(items=[
+        BasketItem("101", product["item_name"], 1, 550.0),
+        BasketItem("101", product["item_name"], 1, 550.0),
+    ])
+    assert not evaluate(basket, mandate).approved
 
 
 def test_unknown_product_blocks(mandate):
