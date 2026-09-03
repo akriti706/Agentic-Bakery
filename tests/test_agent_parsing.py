@@ -1,5 +1,4 @@
 import pytest
-
 import agent
 from agent import AgentError
 from model import Basket, BasketItem

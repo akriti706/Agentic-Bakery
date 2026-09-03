@@ -1,12 +1,4 @@
-"""
-Each rule in policy.RULES gets a test that trips it and one that does not.
-
-The catalog is stubbed so these tests never touch the real database and
-never depend on current stock levels.
-"""
-
 import pytest
-
 import policy
 from model import Basket, BasketItem
 
