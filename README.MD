@@ -758,7 +758,7 @@ It contains:
 * the state machine
 * sequence diagrams
 * design decisions and their trade-offs
-* problems faced during development and their resolutionss
+* problems faced during development and their resolutions
 
 If you want to understand not just *what* the project does but *why* it
 was designed this way, that's the next file to read.
