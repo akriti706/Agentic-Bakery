@@ -46,7 +46,7 @@ class PayRequest(BaseModel):
 
 
 class SessionRequest(BaseModel):
-    customer_id: str
+    customer_id: int
     total_budget: float | None = None
     
 
