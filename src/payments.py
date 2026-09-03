@@ -42,7 +42,7 @@ def _forced_failure() -> bool:
 def _mock(amount, session_id, customer_id) -> PaymentResult:
     if _forced_failure():
         return PaymentResult(FAILED, "mock",
-                             message="Card declined by issuer.")
+                             message="Card declined by issuer. PAYMENT NOT SUCCESSFUL")
     return PaymentResult(CAPTURED, "mock",
                          reference=f"mock_{uuid.uuid4().hex[:12]}",
                          message="Payment captured in test mode.")

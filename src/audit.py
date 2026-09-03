@@ -61,14 +61,14 @@ def get_session(session_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def count_recent_purchases(customer_id: str, minutes: int) -> int:
+def count_recent_purchases(customer_id: int, minutes: int) -> int:
     cutoff = (datetime.now() - timedelta(minutes=minutes)).isoformat()
     conn = _connect()
     row = conn.execute(
         """SELECT COUNT(*) FROM audit_log
            WHERE customer_id = ?
              AND event_type = 'PAYMENT_RESULT'
-             AND decision = 'SUCCESS'
+             AND decision = 'CAPTURED'
              AND timestamp > ?""",
         (customer_id, cutoff)
     ).fetchone()
