@@ -546,7 +546,7 @@ the agent's actions.
 
 ---
 
-## 12. Search, and the promises it makes
+## 12. Search
 
 The agent searches through a tool with seven optional filters:
 `category`, `flavor`, `occasion`, `taste`, `max_price`, `on_sale` and
