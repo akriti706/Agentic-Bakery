@@ -45,10 +45,5 @@ def create(session_id: str, mandate: Mandate) -> Session:
 def get(session_id: str) -> Session | None:
     return _SESSIONS.get(session_id)
 
-
-def drop(session_id: str) -> None:
-    _SESSIONS.pop(session_id, None)
-
-
 def count() -> int:
     return len(_SESSIONS)

@@ -54,7 +54,7 @@ authoritative. The policy layer re-checks product identity, current
 price, quantity, stock availability, budget and the other transaction
 constraints before allowing the purchase to proceed.
 
-The model proposes; the system verifies.
+The model proposes and the system verifies.
 
 ### What happens when something goes wrong?
 
@@ -84,25 +84,27 @@ authorisation, validation, inventory, payment state and auditability.
 That separation is the core of the project.
 
 ---
-
-## 3. Module map
+## 2. Module map
 
 ```mermaid
 flowchart TD
     FE[Static frontend] --> MAIN[main.py<br/>FastAPI routes]
+    MAIN --> DB[database.py<br/>accounts]
     MAIN --> CONV[conversation.py<br/>orchestrates the turn]
     CONV --> SESS[session.py<br/>in-memory state]
     CONV --> AGENT[agent.py<br/>proposes a basket]
     AGENT --> LLM[Groq<br/>tool calling]
     AGENT --> CAT[catalog.py<br/>read-only inventory]
+    AGENT --> AUD[audit.py<br/>append-only log]
     CONV --> POL[policy.py<br/>the gate]
     POL --> CAT
-    POL --> AUD[audit.py<br/>append-only log]
+    POL --> AUD
+    CONV --> AUD
     CONV --> INV[inventory.py<br/>the only stock writer]
     CONV --> PAY[payments.py<br/>mock or Razorpay]
     CONV --> ORD[orders.py<br/>permanent record]
-    MCP[mcp_server.py<br/>external agents] --> CAT
-    MCP --> POL
+    MCPS[mcp_server.py<br/>for external agents] --> CAT
+    MCPS --> POL
 ```
 
 | Module | What it is responsible for | What it writes to |
@@ -118,67 +120,64 @@ flowchart TD
 | `orders.py` | One row per payment attempt | `orders.db` |
 | `audit.py` | The append-only decision log | `shop.db` |
 | `mcp_server.py` | Exposing the shop to outside agents | — |
+| `database.py` | User accounts (only for registration) | `user.db` |
 | `model.py` | `Basket`, `BasketItem`, `Mandate` | — |
-| `database.py` | User accounts | `user.db` |
 
-Every HTTP request goes through `conversation.py`. The other modules do
-not call each other — `agent.py` does not know `policy.py` exists, and
-`inventory.py` does not know about `payments.py`. All the coordination
-happens in one place, which means the whole business flow can be read in
-a single file.
+Almost every request goes through `conversation.py`. The modules it
+calls do not call each other — `agent.py` has never heard of
+`policy.py`, and `inventory.py` has never heard of `payments.py`. All
+the coordination sits in one file, which means you can read the whole
+purchase flow top to bottom without jumping between modules.
+
+Three things write to the audit log: `agent.py` records what it
+searched and what it proposed, `policy.py` records what it decided, and
+`conversation.py` records the request and everything that happens around
+the payment.
 
 ---
 
-## 4. The trust boundary
+## 3. The trust boundary
 
-This is the decision everything else hangs off, so it is worth spending
-a moment on.
-
+The rest of the project builds on this decision, so it deserves a careful consideration:
 ```mermaid
 flowchart TD
-    subgraph claims [Claims - nothing here is trusted]
-        A[agent.py<br/>proposes a basket]
-        B[The model<br/>may hallucinate]
-        C[Basket JSON<br/>unverified prices]
-    end
-    claims --> GATE[policy.evaluate<br/>re-reads the catalog, nine rules]
-    GATE --> actions
-    subgraph actions [Actions - these are irreversible]
-        D[inventory.py<br/>moves stock]
-        E[payments.py<br/>moves money]
-        F[orders.py<br/>permanent record]
-    end
+    A[agent.py proposes a basket]
+    B[The model may hallucinate a<br/>price, a product or a quantity</br>Basket JSON - unverified]
+    A --> B
+    B -->|a claim, not a fact| GATE[policy.evaluate<br/>re-reads the catalog<br/>nine rules]
+    GATE -->|approved| D[inventory.py reserves stock]
+    D --> E[payments.py charges]
+    E --> F[orders.py records the attempt]
+    GATE -->|blocked| G[reason returned<br/>nothing moves]
 ```
 
-Above the line, everything is a claim. The model said "chocolate truffle
-cake, five fifty, two units" and that is all we know. Below the line,
-things become permanent — stock moves, money moves, a record is written.
+Everything above the gate is a claim. The model said "chocolate truffle
+cake, five fifty, two units", and that is all anyone knows at that
+point. Everything below it is permanent — stock moves, money moves, a
+row gets written.
 
-In between sits the gate, which re-reads the catalog and checks the
-claim against it.
+The gate sits in between and re-reads the catalog to check the claim
+against it.
 
-What makes this hold in practice is what `agent.py` does not import. It
-has no reference to `policy.py`, `inventory.py` or `payments.py`. Python
-would not stop someone from changing that later, but keeping the
-dependency boundary visible makes the architecture much easier to
-review, and it means the agent has no direct path to stock or money even
-if the model behind it produces a completely wrong decision.
+What keeps this honest in practice is what `agent.py` does not import.
+There is no reference to `policy.py`, `inventory.py` or `payments.py`
+anywhere in that file. agent has no route to stock or money.
 
-There is a cost to this and it is worth naming: every price is read from
-the database twice. Once so the agent can put a basket together, and
-once so the gate can verify it. That duplication is deliberate. Removing
-it would mean trusting the agent's copy, which is exactly what this
-design refuses to do.
+There is a cost, and it should be said plainly: every price gets read
+from the database twice. Once so the agent can assemble a basket, and
+once so the gate can verify it. That duplication is the point. Reading
+it once would mean trusting the agent's copy, which is the one thing
+this design will not do.
 
 ---
 
-## 5. Session state machine
+## 4. Session state machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> SHOPPING
     SHOPPING --> SHOPPING : browse request
-    SHOPPING --> SHOPPING : basket blocked by gate
+    SHOPPING --> SHOPPING : basket blocked by the gate
     SHOPPING --> SHOPPING : nothing matched
     SHOPPING --> REVIEWING : basket approved
     REVIEWING --> REVIEWING : change approved
@@ -194,20 +193,20 @@ stateDiagram-v2
 
 Four states, all defined in `session.py`.
 
-The self-transitions carry most of the interesting behaviour. A blocked
-change, a cleared cart and a failed payment all leave the session in
-`REVIEWING` — but each of them does something different, and each one is
-logged separately.
+Most of the interesting behaviour lives in the transitions that loop
+back to the same state. A blocked change, a cleared cart and a failed
+payment all leave the session in `REVIEWING`, but each one does
+something different and each one is logged separately.
 
-`PAID` is terminal. A second pay request on an already-paid session is
-refused before any provider is contacted. `CANCELLED` is reachable from
-either working state and is checked at the top of every single turn, so
-an expired mandate cannot be worked around simply by continuing an open
-conversation.
+`PAID` is terminal. If a second pay request arrives on a session that
+has already paid, it is refused before any provider is contacted.
+`CANCELLED` can be reached from either working state, and the expiry
+check runs at the top of every single turn — so letting a conversation
+stay open is not a way around an expired mandate.
 
 ---
 
-## 6. What happens when someone adds to their cart
+## 5. What happens when someone adds to their cart
 
 ```mermaid
 sequenceDiagram
@@ -222,7 +221,7 @@ sequenceDiagram
     U->>C: "i want a chocolate cake"
     C->>AU: REQUEST_RECEIVED
     C->>AG: propose_basket
-    AG->>M: prompt, tool specs, budget
+    AG->>M: prompt, tool specs, remaining budget
     M-->>AG: search_products(category, flavor)
     AG->>CAT: search_products
     CAT-->>AG: rows, relaxed, out_of_stock
@@ -232,32 +231,30 @@ sequenceDiagram
     AG->>AU: BASKET_PROPOSED
     AG-->>C: Basket (unverified)
     C->>P: evaluate
-    P->>CAT: get_product, per item
+    P->>CAT: get_product, once per item
     CAT-->>P: authoritative rows
     P->>AU: POLICY_DECISION
     P-->>C: APPROVE
     C-->>U: cart, alternatives, audit trail
 ```
 
-Three details in there are easy to skim past.
+The model picks the search itself rather than the code guessing on its
+behalf. The loop in `agent.py` allows up to three rounds, so a customer
+asking for two different things gets two separate searches instead of
+one blurred query that matches neither of them properly.
 
-The model calls `search_products` itself, rather than the code guessing
-what to search for. The loop in `agent.py` allows up to three rounds, so
-if someone asks for two different things they get two separate searches
-instead of one blurred query that matches neither properly.
-
-Tool results are trimmed before they go back to the model — nine fields,
-not the whole row. Product descriptions are long and the model does not
-need them to pick an item. This cut the tokens per request by about two
-thirds, which mattered once rate limits started biting.
+Tool results are trimmed before they go back — nine fields, not the
+whole row. Product descriptions are long and the model does not need
+them to choose an item. That change cut tokens per request by roughly
+two thirds, which started to matter once rate limits came into it.
 
 And `policy.py` calls `catalog.get_product()` again for every item, even
 though `agent.py` read the same rows a second earlier. That is not a
-redundant query. That is the verification.
+wasted query. That is the verification.
 
 ---
 
-## 7. What happens when a payment succeeds
+## 6. What happens when a payment succeeds
 
 ```mermaid
 sequenceDiagram
@@ -272,7 +269,7 @@ sequenceDiagram
     U->>C: pay(session_id, total shown)
     C->>P: evaluate again
     P-->>C: APPROVE, verified total
-    C->>C: compare shown total to verified
+    C->>C: shown total == verified total?
     C->>I: reserve
     I-->>C: ok, stock decremented
     C->>AU: STOCK_RESERVED
@@ -282,36 +279,40 @@ sequenceDiagram
     C->>AU: PAYMENT_RESULT
     C->>O: record
     C->>AU: SESSION_COMPLETE
-    C-->>U: paid, reference
+    C-->>U: paid, with reference
 ```
 
-The gate runs a second time here, and it is worth being clear about why.
-The basket was already approved when it was built, possibly a minute
-ago. But stock and prices can change in between. Nothing is trusted
-twice — including this system's own earlier decision.
+The gate runs a second time here, and the reason matters. The basket was
+approved when it was built, but stock and
+prices can get updated or changed in between. 
 
 The browser also sends back the total it was displaying, and that number
-is compared against what the shop just computed. If they no longer
-match, the payment stops before anything is reserved. A customer should
-never end up confirming one amount while the system charges another.
+is compared against what the shop works out right now.If they are not same,
+the payment stops before anything is reserved. A customer
+should never end up confirming one amount while a different one gets
+charged.
 
 ---
 
-## 8. What happens when a payment fails
+## 7. What happens when a payment fails
 
 ```mermaid
 sequenceDiagram
     participant U as Browser
     participant C as conversation.py
+    participant P as policy.py
     participant I as inventory.py
     participant PAY as payments.py
     participant O as orders.py
     participant AU as audit.py
 
     U->>C: pay(session_id, total shown)
+    C->>P: evaluate again
+    P-->>C: APPROVE, verified total
     C->>I: reserve
     I-->>C: ok, stock decremented
     C->>AU: STOCK_RESERVED
+    C->>AU: PAYMENT_ATTEMPT
     C->>PAY: charge
     PAY-->>C: failed, card declined
     C->>AU: PAYMENT_RESULT FAILED
@@ -322,28 +323,23 @@ sequenceDiagram
     C-->>U: not completed, cart intact
 ```
 
-Stock is reserved before the charge, never after. This is the ordering
-worth defending hardest.
+Stock gets reserved before the charge, never after. If it were the other
+way round, another session could take the last item in the gap between
+charging and reserving, and the customer would have paid for something
+that no longer exists. With this ordering the worst normal outcome is
+"your payment didn't go through", and the reservation simply goes back.
 
-If the system charged first and reserved afterwards, another session
-could buy the last cake in between those two operations. That creates a
-much worse failure: the customer paid, but the product is no longer
-available. With the current flow, the worst normal failure is "payment
-didn't go through, so the reservation can be released", which is easy to
-recover from.
+The failed attempt gets written to (audit)`shop.db`. When a dispute
+comes in, the question is what was attempted, not only what worked.
 
-The failed attempt is still written to `orders.db`. A dispute asks what
-was attempted, not only what succeeded.
+The session stays in `REVIEWING` with the cart intact, so retrying is
+one click.
 
-The session stays in `REVIEWING` with the cart intact, so retrying is a
-single click.
 
-**To reproduce this:** set `FORCE_PAYMENT_FAILURE=1` in `.env`. The mock
-provider re-reads the file on every charge, so no restart is needed.
 
 ---
 
-## 9. Payment has three outcomes, not two
+## 8. Payment has three outcomes, not two
 
 | Status | Meaning | Stock | Session becomes |
 |---|---|---|---|
@@ -351,38 +347,30 @@ provider re-reads the file on every charge, so no restart is needed.
 | `initiated` | Razorpay order created, checkout not completed | Released | stays `REVIEWING` |
 | `failed` | Declined, or a provider error | Released | stays `REVIEWING` |
 
-The important distinction is between **creating a Razorpay order** and
-**actually receiving a payment**. `order.create` creates the order, but
-it does not mean the customer has paid.
+The middle one exists because creating a Razorpay order and receiving a
+payment are not the same event. `order.create` produces an order. The
+money has not moved until the customer finishes checkout.
 
-The live Razorpay flow in this project stops at order creation. Treating
-that step as a successful payment would have made a nicer demo, but it
-would put information in the audit log that isn't actually true — which
-is exactly the kind of mistake this project is designed to avoid.
-
-Providers live in a dictionary and are chosen by an environment
-variable:
-
+Calling that a success would have made for a smoother demo, but it would
+put something in the audit log that isn't true — which is the exact
+failure this project is about. So it reports what actually happened.
+razorpay credentials need to be generated and stored as envirnment variable
 ```python
 PROVIDERS = {"mock": _mock, "razorpay": _razorpay}
 ```
 
-Adding another provider is one function and one entry.
-
 ---
 
-## 10. The gate
+## 9. The gate
 
-`policy.RULES` contains nine independent rule functions. Each one
-receives the basket, the mandate and the relevant catalog rows, and
-returns a list of reasons why the basket fails that rule. An empty list
-means the rule passed.
+`policy.RULES` is a list of nine independent functions. Each one gets
+the basket, the mandate and the catalog rows, and hands back a list of
+reasons why it is unhappy. An empty list means that rule is satisfied.
 
-`evaluate()` runs all nine and collects their failures instead of
-stopping at the first one. This is deliberate. If a basket has three
-problems, the customer should see all three at once instead of fixing
-one problem, sending another request, discovering the second problem,
-fixing that, and then discovering the third.
+`evaluate()` runs all nine and gathers everything they return rather
+than stopping at the first failure. That is deliberate. If a basket has
+three things wrong with it, the customer should see all three at once.
+
 
 | Rule | Blocks when |
 |---|---|
@@ -396,46 +384,67 @@ fixing that, and then discovering the third.
 | `_within_total_budget` | Basket total exceeds the mandate budget |
 | `_velocity_ok` | Three or more orders were captured in the last ten minutes |
 
-Because they are independent, adding a tenth rule means writing one
-function and appending it to the list. Nobody has to understand the
-other nine first.
+more rules can be added easily for the gate.
 
-Three of them are worth explaining, because they look either trivial or
-unnecessary until you consider what they catch.
 
-**`_no_duplicates`** might look cosmetic. Why should it matter if the
-same cake appears twice in a basket? Because the basket is assembled by
-an agent, not a person, and stock is checked one line at a time. If
-there are three cakes left and the agent produces two lines of two units
-each, both lines pass the stock check individually while the basket as a
-whole needs four. That shortfall would only surface inside
-`inventory.reserve()`, in the middle of the payment — the worst possible
-moment to find it.
 
-**`_products_exist`** is the anti-hallucination rule, and it protects
-the others too. `_prices_match` and `_stock_sufficient` both skip items
-they cannot find in the catalog, so without this rule an invented
-product would slip past every price and stock check and only fail at
-reservation time.
+**`_no_duplicates`** seems cosmetic — who cares if the same cake shows
+up twice in a list? But this basket was put together by an agent, not a
+person, and stock is checked one line at a time. If there are three
+cakes left and the agent sends two lines of two units each, both lines
+pass the stock check on their own while the basket as a whole needs
+four. 
 
-**`_velocity_ok`** is the only rule that reads the audit log instead of
-the basket. Every other rule asks "is this basket valid?" This one asks
-"is this customer placing orders at a reasonable rate?" A runaway agent
+**`_products_exist`** is the anti-hallucination rule, and it also
+protects the ones after it. `_prices_match` and `_stock_sufficient` both
+skip items they cannot find in the catalog, so without this rule an
+invented product would sail past every price and stock check and only
+fall over at reservation time.
+
+**`_velocity_ok`** is the only rule that looks at the audit log instead
+of the basket. The others ask whether this basket is valid. This one
+asks whether the customer is buying at a human speed. A runaway agent
 produces orders that are each individually perfect — real products,
-correct prices, sufficient stock, within budget — so no amount of
-per-basket checking will catch it. Only the pattern across orders will.
+correct prices, enough stock, inside the budget — so no amount of
+per-basket checking finds it. Only the pattern across orders does.
 
-One implementation note on `_prices_match`: it compares against
-`final_price`, the discounted price, which is computed in exactly one
-place and read by both the agent and the gate. When discounts were
-added, forgetting this in one of those two places broke every discounted
-basket. That story is in section 15.
+One note on `_prices_match`: it compares against `final_price`, the
+discounted price, which is worked out in exactly one place and read by
+both the agent and the gate. 
+
+
+In ordinary use the gate approves nearly everything. The agent is given
+the remaining budget in its prompt, and its search ceiling is capped at
+that same number, so it rarely proposes something it cannot afford. Ask
+for a cake that would break the budget and the agent usually refuses on
+its own, before the gate is even reached — the audit trail for that turn
+shows a `BASKET_PROPOSED` with no `POLICY_DECISION` after it.
+
+That is good product behaviour. The customer gets an answer in one turn
+instead of watching a basket get built and then rejected.
+
+But it is the model's judgement, not enforcement, and the two are not
+interchangeable. The gate exists for the cases the model cannot help
+with, below are some cases.
+
+The first is a request that did not come from this agent at all. Over
+MCP the model is not in the loop, so nothing filters the request before
+it arrives — section 13.
+
+The second is a race. Two customers can both have the last cake in their
+basket, both approved, because the stock was there when each basket was
+built. The model has no way of knowing somebody else took it a second
+later. Only a check at payment time catches that, and it does: the
+second customer is refused with the real stock number, before the
+gateway is contacted.
+
+
 
 ---
 
-## 11. The mandate
+## 10. The mandate
 
-Set when a session opens, fixed for its lifetime:
+Fixed when the session opens, and fixed for its lifetime:
 
 ```python
 @dataclass
@@ -447,45 +456,45 @@ class Mandate:
 ```
 
 The agent is told the budget and how much of it is already committed, so
-it rarely proposes something over the limit in the first place. The gate
+it rarely proposes anything over the limit to begin with. The gate
 enforces it, so it cannot succeed if it tries.
 
-There is no override. A basket over budget is not added, and if one
-somehow reaches checkout the gate stops it before any stock is held or
-any provider is called. Raising a budget means starting a new session
-with a new mandate — which is deliberate, because a limit that can be
-raised mid-conversation is a suggestion, not an authorisation. Every
-order row stores the `mandate_id` it was placed under.
+There is no override anywhere. A basket over budget does not get added,
+and if one somehow reaches checkout the gate stops it before stock is
+held or a provider is called. Changing a budget means starting a new
+session with a new mandate — which is on purpose.
+Every order row stores the `mandate_id` it was placed under.
 
-Right now a human confirms every purchase, so the budget is
-belt-and-braces. The mandate exists for the case this architecture is
-built toward: an agent buying without a person reading each basket.
-Then it is the only record of what was authorised.
+For now, every purchase is confirmed by a person, so the budget constraint 
+acts as an additional safeguard. The mandate becomes critical in the fully 
+autonomous case this architecture is designed for: when an agent can make
+purchases without human approval, it becomes the authoritative record of 
+what the agent is permitted to spend.
 
 ---
 
-## 12. Data model
+## 11. Data model
 
 ```mermaid
 flowchart LR
-    INV[inventory.py] -->|mutable| A[(bakery_shop.db<br/>items)]
+    INV[inventory.py] -->|writes| A[(bakery_shop.db<br/>items)]
     CAT[catalog.py] -->|reads| A
+    LOAD[load_items.py] -->|rebuilds| A
     ORD[orders.py] -->|append-only| B[(orders.db<br/>orders)]
     AUD[audit.py] -->|append-only| C[(shop.db<br/>audit_log)]
-    DB[database.py] --> D[(user.db<br/>users)]
+    DBM[database.py] -->|accounts| D[(user.db<br/>users)]
 ```
 
-Four stores, split by how they change.
+Four stores, separated by how they change.
 
-`bakery_shop.db` is the only mutable one. `load_items.py` rebuilds it
-from `items.csv` with a full table replace, so anything else living
-there would be destroyed every time the catalog reloaded. That is the
-whole reason orders and the audit log are separate files rather than
-extra tables in the same database.
+`bakery_shop.db` is the only one that changes during normal use.
+`load_items.py` rebuilds it from `items.csv` with a full table replace,
+so anything else kept in there would be wiped every time the catalog was
+reloaded. 
 
-`orders` and `audit_log` are append-only by construction — neither
-module exposes an update or a delete. An audit trail that can be edited
-afterwards would not be much use for auditing.
+`orders` and `audit_log` are deliberately append-only. Since neither module 
+exposes update or delete operations, recorded events cannot be rewritten after
+the fact—making the audit log a trustworthy record of the agent’s actions.
 
 **`orders` columns:** `id`, `created_at`, `customer_id`, `session_id`,
 `mandate_id`, `status`, `provider`, `reference`, `amount`, `saved`,
@@ -496,93 +505,104 @@ afterwards would not be much use for auditing.
 `PAYMENT_ATTEMPT`, `PAYMENT_RESULT`, `STOCK_RELEASED`,
 `SESSION_COMPLETE`, `AGENT_ERROR`.
 
-Reading one session's `audit_log` rows in order reproduces the entire
-decision path — what was asked, what was searched, what the model
-proposed, what the gate decided, and what happened to the stock and the
-money.
 
 ---
 
-## 13. Search, and the promises it makes
+## 12. Search, and the promises it makes
 
 The agent searches through a tool with seven optional filters:
 `category`, `flavor`, `occasion`, `taste`, `max_price`, `on_sale` and
 `query`.
 
-**The filter values come from the database.** `catalog.enum_values()`
-reads the distinct values at import and the tool schema is built from
-them, splitting compound cells so `Chocolate & Cherry` yields both tags.
-With a free-text field the model could search for a flavour this shop
-has never sold, get nothing back, and tell the customer the shop is
-empty. An enum makes the impossible request visible to the model before
-it is made — and generating it from the database means adding a new
-flavour to the catalog needs no code change at all.
+**The filter values are derived directly from the catalog.** `catalog.enum_values()`
+reads the distinct values from the database when the agent starts, and the tool schema 
+is built from those values. Compound entries are split into individual tags, so a value 
+such as Chocolate & Cherry makes both flavours available as valid filters. This prevents 
+the model from requesting values the shop does not actually support. More importantly, 
+because the schema is generated from the catalog, adding a new flavour requires no code
+ change—the next agent run picks it up automatically.
 
-**The price ceiling is the remaining budget.** `_capped_price()` caps
-`max_price` at what is left of the mandate, so the model never even sees
-an item it could not afford. On a modification the ceiling allows for
-the largest item in the basket being swapped out, otherwise "replace
-this cake with a cheaper one" would come back empty.
+**The price ceiling follows the remaining budget.**
+`_capped_price()` limits `max_price` to whatever the 
+customer has left to spend. This prevents the search
+from returning products that the current budget cannot
+cover. During basket modifications, the calculation also
+accounts for the amount that can be freed by replacing 
+an existing item, allowing requests such as “replace this 
+cake with a cheaper one” to be evaluated against the
+correct available budget.
 
-**Relaxation is disclosed, never silent.** When a filter combination
-matches nothing, the weakest filter is dropped and the search retried,
-in this order:
+**Relaxation gets reported, not hidden.**When no product satisfies all the requested
+filters, the search progressively removes the least important constraint, following:
 
 ```python
 RELAX_ORDER = ["taste", "occasion", "flavor", "query"]
 ```
 
-The dropped filters go back to the model, which is required to tell the
-customer which one it had to let go of. Substituting silently is worse
-than returning nothing.
+The filters that were removed are included in the tool response, and 
+the model is instructed to tell the customer that the result is not 
+an exact match. The code therefore guarantees that the information 
+is surfaced to the model, while the final disclosure still depends
+on the model following that instruction. Quietly substituting a different
+product would be worse than clearly explaining the compromise.
 
-**Two filters are never relaxed.** `category` and `max_price` are absent
-from that list on purpose. Offering a brownie to someone who asked for a
-cake, or a ₹900 cake to someone who said ₹500, is not a relaxation. It
-is a wrong answer.
+**Two filters are never relaxed.** `category` and `max_price` are
+deliberately missing from that list. Offering a brownie to somebody who
+asked for a cake, or a ₹900 cake to somebody who said ₹500, is not a
+relaxation. It is a wrong answer.
 
-**Sold out is not the same as does not exist.** When relaxation happens,
-the original filters are run again without the stock condition. Anything
-that matched but has none left is named to the model, which reports it
-by name and offers alternatives rather than quietly substituting one.
-Those are two different answers for the customer, and only one of them
-means come back tomorrow.
+**Out-of-stock and unavailable products are treated differently.** A product
+that exists in the catalog but has no remaining stock is reported as
+sold out, while a product with no matching catalog entry is treated
+as unavailable. When a requested product is sold out, the model is
+given the product information and suitable alternatives, but the 
+alternative is never silently placed in the basket. The distinction 
+matters: one is a temporary stock problem; the other means the 
+requested product is not part of the shop's catalog.
 
 ---
 
-## 14. MCP: opening the shop to other agents
+## 13. MCP: opening the shop to other agents
 
 Everything so far describes one buyer — the agent running inside this
-application. Agentic commerce becomes more interesting in the other
-direction: a merchant exposes its shop so that any buyer's agent can
-transact with it.
+application. Agentic commerce gets more interesting in the other
+direction, where a merchant exposes its shop so that any buyer's agent
+can transact with it.
 
 ```mermaid
-flowchart LR
-    EXT[External agent<br/>not controlled by us] --> MCP[mcp_server.py]
-    INT[agent.py<br/>internal] --> GATE[policy.evaluate]
-    MCP --> CAT[catalog.py<br/>read-only]
-    MCP --> GATE
-    GATE --> V[Verified quote]
+flowchart TD
+    EXT[External agent<br/>written by somebody else] --> MCPS[mcp_server.py]
+    BROWSER[Browser] --> CONV[conversation.py]
+    CONV --> AG[agent.py]
+    AG --> CAT[catalog.py<br/>read-only]
+    MCPS --> CAT
+    CONV --> GATE[policy.evaluate<br/>nine rules]
+    MCPS --> GATE
+    GATE --> OUT[Approved, or a<br/>reason for each failure]
 ```
+
+Both paths reach the same gate. Neither agent calls it — in the
+storefront `conversation.py` does, and over MCP the server does. That is
+the same separation as everywhere else, and it is why the external path
+gets the same treatment.
 
 Three tools are published:
 
 | Tool | What it does | Writes |
 |---|---|---|
 | `search_products` | Live inventory search, same filters and relaxation as the internal agent | no |
-| `get_product` | One product by id, with current price and stock | no |
+| `get_product` | One product by id, current price and stock | no |
 | `quote_basket` | Prices a proposed basket through the real gate | no |
 
 `quote_basket` is the one that makes the argument. An external agent
-sends product ids and quantities. The server ignores any price the
-caller supplies, reads the real price from the catalog, builds a
-`Mandate`, and calls the same `policy.evaluate()` the internal flow
-uses. It returns whether the basket is approved, the total the shop
-computed, and a reason for every rule that failed.
+sends product ids and quantities. The server throws away any price the
+caller supplied, reads the real one from the catalog, builds a
+`Mandate`, and calls the same `policy.evaluate()` the storefront uses.
+Back comes whether the basket is approved, the total the shop worked
+out, and a reason for every rule that failed.
 
-So an agent written by somebody else, which does not follow this
-project's prompt, hits exactly the checks the internal one does:
+So an agent somebody else wrote, which has never seen this project's
+prompt, runs into exactly the same checks:
 
 ```
 hallucinated product  ->  'unknown' is not a product this shop sells.
@@ -590,96 +610,75 @@ hallucinated product  ->  'unknown' is not a product this shop sells.
 over the budget       ->  Rs1000.00 is Rs500.00 over your Rs500.00 budget.
 ```
 
-This works precisely because of where the boundary was drawn in section
-4. The gate was never inside the agent, so swapping the agent for one
-written by somebody else changes nothing about what is enforced. That is
-the payoff of the whole design, and MCP is what makes it visible rather
-than something merely claimed.
+This works because the enforcement boundary was deliberately kept outside the agent.
+The gate does not depend on which agent makes the decision, so replacing the 
+agent with a different model or implementation does not change the rules that
+are enforced. MCP makes this separation explicit: the agent can request an action,
+but the enforcement layer remains independent and authoritative rather than being 
+something the agent merely claims to follow.
 
-**What is deliberately not exposed.** None of these tools reserve stock
-or charge a card. `quote_basket` returns a price, not a hold. Committing
-to a purchase still requires an authenticated session and a mandate
-issued to a known customer, which stays behind `conversation.py`.
-Publishing a write tool would hand an anonymous caller the ability to
-move real stock, and no amount of gate would make that acceptable.
 
----
+**What is deliberately left out.** None of these tools can
+reserve inventory or access payment details. `quote_basket`
+provides a price estimate, not a stock reservation or purchase hold.
+Actually committing a purchase still requires an authenticated session
+and a mandate tied to a known customer, which remains behind `conversation.py`.
+Exposing a write operation through the agent would give an unauthenticated caller 
+the ability to affect real inventory, and no downstream gate can make that safe. 
+For that reason, the MCP layer is intentionally read-only.
 
-## 15. Problems faced during development, and their resolutions
 
-These are the bugs that changed how the design works, rather than the
-ones that were just typos.
+## 14. Problems Faced During Development and Their Resolution
 
-**Adding discounts broke every discounted basket.** After adding a
-`discount` column, the gate immediately started rejecting baskets that
-were completely correct. The agent was doing the right thing — sending
-the discounted price — but the gate was still comparing against the
-original. Both sides were computing the payable price, and only one had
-been updated. The fix was to make `catalog.final_price()` the only place
-that calculation happens, with both sides reading it. *A derived value
-computed in two places will drift apart, and you find out at the worst
-time.*
+Here are some of the main roadblocks we hit and how we solved them.
 
-**"What's on discount" was filling the cart.** Asking a question and
-placing an order looked identical to the system, because the agent could
-only ever return baskets. It had no way to say "the customer is just
-asking". The fix was an `intent` field with two values, `basket` and
-`browse`. *If an agent has no way to express what it means, it will
-express the closest thing it can, and that will be wrong.*
+1. Problem: The introduction of a discount column caused the validation gate to reject valid carts. The agent and the gate were calculating the payable price independently, and only one component had been updated to account for the new column.
 
-**A stamped field made every change look like a change.** Baskets were
-compared with `updated.items == previous.items` to work out whether
-anything had actually changed. The previous basket had `list_price`
-written onto it by the gate; a freshly parsed one did not. So the
-comparison always failed. The model was correctly refusing an
-over-budget addition and explaining exactly why, but the customer saw
-"Updated. Your cart:" instead of the reason. The fix was comparing only
-what the customer actually chose — product, quantity, price. *Derived
-state does not belong in an identity comparison.* Two tests cover it
-now.
+Resolution: Centralized the calculation by introducing catalog.final_price(). Both the agent and the gate now read from this single method.
 
-**A guard blocked the thing it was meant to allow.** Any empty basket
-coming back from a modification was discarded, on the assumption that
-the model had failed. It also discarded "empty the cart", which is a
-perfectly reasonable request. The fix was a precise check: if the model
-sent items and every one failed to parse, that is a failure and it
-retries; if it sent an empty list, that is deliberate and it is
-honoured. *A guard that cannot tell intent from failure will block
-both.*
+Architectural Takeaway: A derived value computed in multiple places will inevitably drift. There must be a single source of truth for all derived calculations.
 
-**The prompt itself was the bug.** The JSON template given to the model
-read `{"intent": "browse" or "basket", ...}`, meaning "one of these
-two". The model sometimes copied it literally, producing JSON that would
-not parse. The fix was a concrete example value, with the allowed values
-moved into the written rules. *A prompt is an interface, and ambiguity
-in an interface is a bug in it.*
+2. Asking a Question Filled the Cart
+Problem: The system could not distinguish between a user asking a question (e.g., "What's on discount?") and placing an order. Because the agent's only output mechanism was returning a basket, informational queries were accidentally filling the cart.
 
-**An argument was threaded through one call site and not the other.**
-When the search ceiling became budget-aware, `spent` was passed through
-`modify_basket` but the edit to `propose_basket` silently failed to
-apply. Every first message crashed. *A test that exercises both entry
-points would have caught it, so one was written.*
+Resolution: Introduced an explicit intent field to the agent's output schema with two distinct modes (basket and browse).
 
-**A rule was silently doing nothing.** `_velocity_ok` counts recent
-captured payments from the audit log, but the query was still looking
-for the old `SUCCESS` status while payments had moved to `captured`. The
-count was always zero, so the rule always passed. Nothing appeared
-broken — it simply never protected anything. *When two modules agree on
-a string, changing it in one place fails quietly.*
 
----
+3. Identity Checks Failing on Derived State
+Problem: The system falsely detected changes on every request. The gate was stamping a list_price 
+onto the previous basket, which caused identity checks (updated.items == previous.items) to fail 
+when compared against freshly parsed baskets. This masked the model's actual reasoning from the user.
 
-## 16. Testing
+Resolution: Refactored the equality check to evaluate only immutable, customer-driven choices (product, quantity, and price). Added unit tests to enforce this constraint.
+
+4. Overzealous System Guards
+
+Problem: A safety guard designed to catch model failures threw away any empty basket returned from a modification. This inadvertently blocked users from deliberately emptying their carts ("empty the cart" requests were discarded).
+Resolution: Replaced the broad guard with a granular check: if the model sends items and every one fails to parse, the system retries; if it sends an empty list, it is accepted as a deliberate action.
+
+
+5. Prompt Ambiguity Breaking JSON Parsing
+Problem: The JSON prompt template included inline logic (e.g., {"intent": "browse" or "basket"}). The model sometimes treated this literally, outputting invalid JSON that crashed the parser.
+
+Resolution: Separated the schema structure from the business rules. Replaced inline logic with concrete example values in the JSON template and moved the allowed enumerations into the written prompt instructions.
+
+6.Interface Parity Across Entry Points
+Problem: When the search ceiling became budget-aware, a new spent parameter was threaded into modify_basket, but propose_basket was missed. This caused silent failures and crashes on initial interactions.
+
+Resolution: Fixed the missing parameter and wrote integration tests that explicitly exercise and enforce parity across all entry points.
+
+
+## 15. Testing
 
 41 tests, none of which touch the network or the live database. The
 catalog and audit modules are stubbed, so a test never fails because a
-cake was bought five minutes earlier, and never writes rows into the
-real audit log.
+cake got bought five minutes earlier, and the tests never write rows
+into the real audit log.
 
 | File | What it covers |
 |---|---|
-| `test_policy.py` | Every rule in `RULES`, both when it passes and when it should block |
-| `test_pricing.py` | Discounted price accepted, original price rejected, savings read from the catalog |
+| `test_policy.py` | Every rule in `RULES`, both passing and blocking |
+| `test_pricing.py` | Discounted price accepted, original rejected, savings read from the catalog |
 | `test_agent_parsing.py` | Valid, fenced and malformed model output; the budget ceiling on both entry points |
 | `test_flow.py` | Capture, failure rollback, `initiated` not treated as paid, stale total, double payment, clearing the cart |
 
@@ -688,67 +687,44 @@ pytest
 41 passed
 ```
 
-The most important tests are the ones that verify the system **refuses**
-to do something — that a blocked basket never reaches the gateway, that
-a stale total is never charged, and that a failed payment gives back the
-stock it was holding. Those behaviours are central to the design, and
-they are also the easiest things to accidentally break when changing the
-code later.
+The tests that matter most are the ones asserting a refusal — that a
+blocked basket never reaches the gateway, that a stale total is never
+charged, and that a failed payment hands back the stock it was holding.
+Those are the behaviours the design exists to guarantee, and the ones
+easiest to break by accident later on.
 
 ---
 
-## 17. Extending it
+## 17. Known limitations
 
-| To add | What changes |
-|---|---|
-| A safety rule | one function appended to `policy.RULES` |
-| A payment provider | one function and one entry in `payments.PROVIDERS` |
-| A model provider | one function and one entry in `agent.PROVIDERS` |
-| An MCP tool | one decorated function in `mcp_server.py` |
-| A search filter | a clause in `catalog._build`, a parameter in the tool spec, and its name in `RELAX_ORDER` if it should be droppable |
-| A product attribute | a column in `items.csv`; the enums regenerate on restart |
+This is a buildathon project, not a production payment system. Better to
+state the gaps than let them be found.
 
-Nothing in that table requires touching more than two files.
-
----
-
-## 18. Known limitations
-
-This is a buildathon project, not a production payment system. These are
-the main gaps, stated rather than left to be found.
-
-**Sessions live in memory.** Restarting the application clears carts,
-and the current implementation assumes a single worker process. For a
-production deployment, session state would need to move to a persistent
-or shared store. The design keeps that responsibility inside one module,
-so replacing it would not require changing the policy layer.
+**Sessions live in memory.** Restarting the application clears every
+cart, and the implementation assumes a single worker process. This is
+the clearest distance between this and something production-ready.
+Moving the session store would touch one module; the time went into the
+gate instead.
 
 **The Razorpay flow stops at order creation.** The checkout handoff is
-not implemented, so a live payment is reported as `initiated` rather
-than `captured`. The mock provider is used to demonstrate the complete
-flow, including successful payment and rollback after failure.
+not implemented, so a live payment reports `initiated` rather than
+`captured`. The mock provider exists so the complete flow, rollback
+included, can still be demonstrated.
 
-**Enums and tool specifications are built at import time.** If the
-catalog is edited while the server is already running, the server needs
-a restart before the agent sees the new values.
+**Enums and tool specs are built at import time.** Editing the catalog
+while the server is running means restarting before the agent sees the
+new values.
 
-**A crash can leave stock reserved.** If the process crashes after
-reserving stock but before releasing it, that reservation remains in
-place. At this scale it can be fixed manually. A production system would
-need a reservation timeout or a background cleanup mechanism.
+**A crash can leave stock reserved.** If the process dies after
+reserving but before releasing, that reservation stays. At this scale it
+can be fixed by hand; production would need a reservation timeout.
 
-**Intent classification still depends on the model.** The model decides
-whether a message is a browsing request or one that should modify the
-basket. Occasionally a browsing request could be read as a basket
-request. The policy layer limits the damage that can cause, but it
-cannot prevent the misunderstanding itself.
 
-**Passwords are stored as plain text.** Intentionally out of scope for
-this implementation, and wrong anywhere else.
+**Not using proper constraints for the user.db ,email id are not unique and passwords are stored as plain text. ** 
 
 ---
 
-## 19. Running it
+## 18. Running it
 
 ```bash
 pip install -r requirements.txt
@@ -758,7 +734,7 @@ pytest
 uvicorn main:app --reload --app-dir src
 ```
 
-Then open `http://127.0.0.1:8000`, register an account, and log in — the
+Open `http://127.0.0.1:8000`, register an account, and log in — the
 session and its mandate are created at login.
 
 `python src/load_items.py` reloads the catalog and resets stock.
@@ -774,23 +750,3 @@ session and its mandate are created at login.
 
 ---
 
-## 20. Against the track brief
-
-> Every money action explainable, bounded and gated. Show the audit
-> trail and one failure handled gracefully.
-
-**Explainable** is `audit.py`. Every search, proposal, decision, stock
-movement and payment result is written in order, append-only, and shown
-live in the interface. Section 12 lists the event types; one session's
-rows reproduce the whole decision path.
-
-**Bounded** is the `Mandate`. A budget and an expiry, fixed before
-shopping starts and enforced with no override. Section 11.
-
-**Gated** is `policy.evaluate()`. Nine rules, re-run before every basket
-change and again before payment. The agent cannot reach stock or money
-without passing them. Sections 4 and 10.
-
-**One failure handled gracefully** — the payment declines, the reserved
-stock is released, the failed attempt is written to `orders.db`, and the
-cart survives so the customer can retry. Section 8.

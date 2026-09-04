@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from model import Basket, Mandate
+from model import  Mandate
 import catalog
 import policy
 import inventory
@@ -94,9 +94,8 @@ def _summary(basket, alternatives, tail):
     if basket.saved:
         text += f"  (saved Rs{basket.saved:.2f})"
     if alternatives:
-        text += ("\n\nAlso available: "
-                 + ", ".join(f"{a['name']} (Rs{a['price']:.2f})"
-                             for a in alternatives) + ".")
+        text+="\n\nAlso available :\n"+"\n".join(
+            f"* {a['name']} - Rs {a['price']:.2f}" for a in alternatives)
     return text + f"\n\n{tail}"
 
 
@@ -131,7 +130,6 @@ def _accept(s, basket, seen, opening, tail):
 
 
 def _browse(s, basket, seen):
-    """The customer asked what exists. Show it; change nothing."""
     if seen:
         s.last_search = seen
 
