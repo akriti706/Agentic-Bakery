@@ -137,7 +137,7 @@ the payment.
 
 ---
 
-## 3. The trust boundary
+## 3. The Flow Chart
 
 The rest of the project builds on this decision, so it deserves careful
 consideration.
@@ -377,7 +377,7 @@ one click.
 
 ---
 
-## 8. Payment has three outcomes, not two
+## 8. Payment outcomes
 
 | Status | Meaning | Stock | Session becomes |
 |---|---|---|---|
@@ -761,13 +761,6 @@ pytest
 41 passed
 ```
 
-The tests that matter most are the ones asserting a refusal — that a
-blocked basket never reaches the gateway, that a stale total is never
-charged, and that a failed payment hands back the stock it was holding.
-Those are the behaviours the design exists to guarantee, and the ones
-easiest to break by accident later on.
-
----
 
 ## 16. Known limitations
 
