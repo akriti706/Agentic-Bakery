@@ -141,14 +141,26 @@ the payment.
 The rest of the project builds on this decision, so it deserves a careful consideration:
 ```mermaid
 flowchart TD
-    A[agent.py proposes a basket]
-    B[The model may hallucinate a<br/>price, a product or a quantity</br>Basket JSON - unverified]
-    A --> B
-    B -->|a claim, not a fact| GATE[policy.evaluate<br/>re-reads the catalog<br/>nine rules]
-    GATE -->|approved| D[inventory.py reserves stock]
-    D --> E[payments.py charges]
-    E --> F[orders.py records the attempt]
-    GATE -->|blocked| G[reason returned<br/>nothing moves]
+    MSG[Customer message]
+    MSG --> AG[agent.py]
+    AG <-->|prompt and tool results| LLM[The model<br/>may get the price, the product<br/>or the quantity wrong]
+    AG -->|reads| CAT[(catalog)]
+    AG --> BASKET[Basket JSON<br/>prices the model claims]
+ 
+    BASKET ==>|a claim, not a fact| GATE1{{policy.evaluate<br/>nine rules}}
+    GATE1 -->|reads| CAT
+    GATE1 -->|blocked| STOP1[Reason returned<br/>cart unchanged]
+    GATE1 -->|approved| CART[Cart updated<br/>customer sees it]
+ 
+    CART --> PAYBTN[Customer presses Pay]
+    PAYBTN ==> GATE2{{policy.evaluate again<br/>same nine rules}}
+    GATE2 -->|reads| CAT
+    GATE2 -->|blocked| STOP2[Reason returned<br/>nothing has moved]
+    GATE2 ==>|approved| TOTAL[Shown total<br/>== verified total?]
+    TOTAL ==>|yes| RES[inventory.py<br/>reserves stock]
+    RES ==> CHG[payments.py<br/>charges]
+    CHG -->|captured| DONE[orders.py records it<br/>session is paid]
+    CHG -->|failed or initiated| BACK[inventory.py releases stock<br/>orders.py still records the attempt]
 ```
 
 Everything above the gate is a claim. The model said "chocolate truffle
